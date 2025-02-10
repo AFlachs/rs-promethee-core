@@ -115,6 +115,20 @@ impl PrometheeProblem {
         self.n
     }
 
+    pub fn w(&self, k: usize) -> f64 {
+        match self.weights.get(k) {
+            None => panic!("Index out of range"),
+            Some(&w) => w,
+        }
+    }
+
+    pub fn pref_fun(&self, k: usize) -> &GeneralizedCriterion {
+        match self.generalized_criteria.get(k) {
+            None => panic!("Index out of range"),
+            Some(pf) => pf,
+        }
+    }
+
     pub fn smallest_p_vshape(&self, k: usize) -> f64 {
         self.argsorted_eval_matrix[k]
             .as_ref()

@@ -1,8 +1,8 @@
-extern crate rs_promethee;
+extern crate rs_promethee_core;
 
 use rand::prelude::*;
-use rs_promethee::generalized_criterion::GeneralizedCriterion;
-use rs_promethee::*;
+use rs_promethee_core::generalized_criterion::GeneralizedCriterion;
+use rs_promethee_core::*;
 
 fn random_promethee_problem(n: usize, q: usize, max_val: f64) -> PrometheeProblem {
     let mut eval_matrix: Vec<Vec<f64>> = vec![vec![0.0; n]; q];
