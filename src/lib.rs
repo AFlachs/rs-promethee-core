@@ -21,8 +21,12 @@ impl Promethee2Result {
             .collect::<Vec<f64>>()
     }
 
-    pub fn net_flow(&self, ai: usize) -> f64 {
-        self.positive_flows[ai] - self.negative_flows[ai]
+    pub fn net_flow(&self, ai: usize) -> Option<f64> {
+        if ai >= self.positive_flows.len() {
+            None
+        } else {
+            Some(self.positive_flows[ai] - self.negative_flows[ai])
+        }
     }
 
     pub fn unicriterion_net_flows(&self, k: usize) -> Vec<f64> {
@@ -33,8 +37,12 @@ impl Promethee2Result {
             .collect::<Vec<f64>>()
     }
 
-    pub fn unicriterion_net_flow(&self, k: usize, ai: usize) -> f64 {
-        self.unicrit_positive_flows[k][ai] - self.unicrit_negative_flows[k][ai]
+    pub fn unicriterion_net_flow(&self, k: usize, ai: usize) -> Option<f64> {
+        if ai >= self.unicrit_positive_flows[k].len() {
+            None
+        } else {
+            Some(self.unicrit_positive_flows[k][ai] - self.unicrit_negative_flows[k][ai])
+        }
     }
 
     /// Return arguments corresponding to the alternatives, ranked in descending order of preference
@@ -127,36 +135,39 @@ impl PrometheeProblem {
         self.n
     }
 
-    pub fn w(&self, k: usize) -> f64 {
-        match self.weights.get(k) {
-            None => panic!("Index out of range"),
-            Some(&w) => w,
-        }
+    pub fn w(&self, k: usize) -> Option<&f64> {
+        self.weights.get(k)
     }
 
-    pub fn pref_fun(&self, k: usize) -> &GeneralizedCriterion {
-        match self.generalized_criteria.get(k) {
-            None => panic!("Index out of range"),
-            Some(pf) => pf,
-        }
+    pub fn pref_fun(&self, k: usize) -> Option<&GeneralizedCriterion> {
+        self.generalized_criteria.get(k)
     }
 
-    pub fn smallest_p_vshape(&self, k: usize) -> f64 {
-        self.argsorted_eval_matrix[k]
-            .as_ref()
-            .expect("to be computed at init")
-            .windows(2)
-            .map(|w| self.evaluation_matrix[k][w[1]] - self.evaluation_matrix[k][w[0]])
-            .fold(
-                f64::INFINITY,
-                |acc, b| {
-                    if b == 0.0 {
-                        acc
-                    } else {
-                        acc.min(b)
-                    }
-                },
-            )
+    pub fn smallest_p_vshape(&self, k: usize) -> Option<f64> {
+        if k >= self.q {
+            None
+        } else {
+            match self.generalized_criteria[k] {
+                GeneralizedCriterion::VShape { p: _ } => Some(
+                    self.argsorted_eval_matrix[k]
+                        .as_ref()
+                        .expect("to be computed at init")
+                        .windows(2)
+                        .map(|w| self.evaluation_matrix[k][w[1]] - self.evaluation_matrix[k][w[0]])
+                        .fold(
+                            f64::INFINITY,
+                            |acc, b| {
+                                if b == 0.0 {
+                                    acc
+                                } else {
+                                    acc.min(b)
+                                }
+                            },
+                        ),
+                ),
+                _ => None,
+            }
+        }
     }
 
     pub fn fast_pos_unicriterion_flow(
@@ -207,8 +218,8 @@ impl PrometheeProblem {
         positive_flow
     }
 
-    pub fn get_eval(&self, k: usize, i: usize) -> f64 {
-        self.evaluation_matrix[k][i]
+    pub fn get_eval(&self, k: usize, i: usize) -> Option<&f64> {
+        self.evaluation_matrix.get(k)?.get(i)
     }
 
     pub fn fast_neg_unicriterion_flow(
@@ -263,7 +274,10 @@ impl PrometheeProblem {
 
     /// Compute the unicriterion positive and negative flows for criterion k
     /// using the O(qnlogn) method from Van Asche, 2018
-    fn fast_unicriterion_flows(&self, k: usize) -> (Vec<f64>, Vec<f64>) {
+    fn fast_unicriterion_flows(&self, k: usize) -> Option<(Vec<f64>, Vec<f64>)> {
+        if k >= self.q {
+            return None;
+        }
         let (q, p) = match self.generalized_criteria[k] {
             GeneralizedCriterion::VShape { p } => (0.0, p),
             GeneralizedCriterion::Linear { q, p } => (q, p),
@@ -278,7 +292,7 @@ impl PrometheeProblem {
 
         let positive_flow = self.fast_pos_unicriterion_flow(q, p, fks, argsorted_fks);
         let negative_flows = self.fast_neg_unicriterion_flow(q, p, fks, argsorted_fks);
-        (positive_flow, negative_flows)
+        Some((positive_flow, negative_flows))
     }
 
     fn slow_unicriterion_flows(
@@ -305,7 +319,7 @@ impl PrometheeProblem {
             .unzip()
     }
 
-    fn unicriterion_flows(&self, k: usize) -> (Vec<f64>, Vec<f64>) {
+    fn unicriterion_flows(&self, k: usize) -> Option<(Vec<f64>, Vec<f64>)> {
         if k >= self.q {
             panic!("Wrong criterion index used, {}>{}", k, self.q)
         }
@@ -326,7 +340,7 @@ impl PrometheeProblem {
                             .collect()
                     })
                     .collect();
-                self.slow_unicriterion_flows(&dist_mat, generalized_criterion)
+                Some(self.slow_unicriterion_flows(&dist_mat, generalized_criterion))
             }
         }
     }
@@ -342,7 +356,7 @@ impl PrometheeProblem {
 
         for k in 0..self.q {
             // compute positive and negative unicriterion flow and add it to the global
-            (pos_unicriterion_flow, neg_unicriterion_flow) = self.unicriterion_flows(k);
+            (pos_unicriterion_flow, neg_unicriterion_flow) = self.unicriterion_flows(k).unwrap();
             positive_unicriterions_flows.push(pos_unicriterion_flow);
             negative_unicriterions_flows.push(neg_unicriterion_flow);
 
@@ -467,7 +481,8 @@ mod tests {
             slow_pos_flow = round_vec(&mut slow_pos_flow);
             slow_neg_flow = round_vec(&mut slow_neg_flow);
 
-            let (mut fast_pos_flow, mut fast_neg_flow) = problem.fast_unicriterion_flows(k);
+            let (mut fast_pos_flow, mut fast_neg_flow) =
+                problem.fast_unicriterion_flows(k).unwrap();
             fast_pos_flow = round_vec(&mut fast_pos_flow);
             fast_neg_flow = round_vec(&mut fast_neg_flow);
 
