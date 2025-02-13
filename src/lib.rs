@@ -135,6 +135,10 @@ impl PrometheeProblem {
         self.n
     }
 
+    pub fn q(&self) -> usize {
+        self.q
+    }
+
     pub fn w(&self, k: usize) -> Option<&f64> {
         self.weights.get(k)
     }
