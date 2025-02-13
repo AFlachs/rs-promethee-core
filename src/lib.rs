@@ -21,6 +21,18 @@ impl Promethee2Result {
             .collect::<Vec<f64>>()
     }
 
+    pub fn net_flow(&self, ai: usize) -> f64 {
+        self.positive_flows[ai] - self.negative_flows[ai]
+    }
+
+    pub fn unicriterion_net_flows(&self, k: usize) -> Vec<f64> {
+        self.unicrit_positive_flows[k]
+            .iter()
+            .zip(&self.unicrit_negative_flows[k])
+            .map(|(p, n)| *p - n)
+            .collect::<Vec<f64>>()
+    }
+
     pub fn unicriterion_net_flow(&self, k: usize, ai: usize) -> f64 {
         self.unicrit_positive_flows[k][ai] - self.unicrit_negative_flows[k][ai]
     }
