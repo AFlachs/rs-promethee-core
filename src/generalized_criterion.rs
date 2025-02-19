@@ -1,5 +1,6 @@
 #[derive(Debug)]
 pub enum GeneralizedCriterion {
+    UShape { p: f64 },
     VShape { p: f64 },
     Linear { q: f64, p: f64 },
     Usual,
@@ -17,6 +18,13 @@ impl GeneralizedCriterion {
                     0.0
                 }
             }
+            GeneralizedCriterion::UShape { p } => {
+                if d_ij < p {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
         }
     }
 
@@ -30,6 +38,13 @@ impl GeneralizedCriterion {
                         1.0
                     } else {
                         0.0
+                    }
+                }
+                GeneralizedCriterion::UShape { p } => {
+                    if d_ij.abs() < p {
+                        0.0
+                    } else {
+                        1.0
                     }
                 }
             }
@@ -62,7 +77,7 @@ mod test_generalized_normalisation {
     use super::normalize_v_shape;
 
     #[test]
-    fn test_u_shape_q0() {
+    fn test_linear_q0() {
         let a = normalize_linear(0.0, 1.0, -1.0);
         let b = normalize_linear(0.0, 1.0, 0.5);
         let c = normalize_linear(0.0, 1.0, 1.1);
@@ -73,7 +88,7 @@ mod test_generalized_normalisation {
     }
 
     #[test]
-    fn test_u_shape_q1() {
+    fn test_linear_q1() {
         let a = normalize_linear(1.0, 2.0, 0.0);
         let b = normalize_linear(1.0, 3.0, 1.5);
         let c = normalize_linear(1.0, 3.0, 2.0);

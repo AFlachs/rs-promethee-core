@@ -118,6 +118,7 @@ impl PrometheeProblem {
                     Some(argsorted_fks)
                 }
                 GeneralizedCriterion::Usual => None,
+                _ => unimplemented!("Not implemented for this criterion"),
             })
             .collect();
 
@@ -129,6 +130,15 @@ impl PrometheeProblem {
             weights: weights.to_vec(),
             argsorted_eval_matrix,
         }
+    }
+
+    fn argsort_evals(&mut self, k: usize) {
+        self.argsorted_eval_matrix[k] = {
+            let fks = &self.evaluation_matrix[k];
+            let mut argsorted_fks: Vec<usize> = (0..self.n()).collect();
+            argsorted_fks.sort_unstable_by(|&i, &j| fks[i].partial_cmp(&fks[j]).unwrap());
+            Some(argsorted_fks)
+        };
     }
 
     pub fn n(&self) -> usize {
@@ -387,16 +397,25 @@ impl PrometheeProblem {
         }
     }
 
-    pub fn sorted_evals(&self, k: usize) -> Option<Vec<f64>> {
+    /// Return the evaluation of the alternatives for criterion k, sorted in ascending order
+    /// If the evaluation matrix is not sorted, compute it
+    pub fn sorted_evals(&self, k: usize) -> Vec<f64> {
         match self.argsorted_eval_matrix[k].as_ref() {
-            Some(sorted_indices) => Some(
-                sorted_indices
-                    .iter()
-                    .map(|&i| self.evaluation_matrix[k][i])
-                    .collect(),
-            ),
-            None => None,
+            Some(sorted_indices) => sorted_indices
+                .iter()
+                .map(|&i| self.evaluation_matrix[k][i])
+                .collect(),
+            None => {
+                let mut sorted_fks = self.evaluation_matrix[k].clone();
+                sorted_fks.sort_unstable_by(|&i, &j| i.partial_cmp(&j).unwrap());
+                sorted_fks
+            }
         }
+    }
+
+    pub fn shift_eval(&mut self, k: usize, a: usize, shift: f64) {
+        self.evaluation_matrix[k][a] += shift;
+        self.argsort_evals(k);
     }
 }
 
