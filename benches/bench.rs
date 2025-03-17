@@ -1,5 +1,3 @@
-extern crate rs_promethee_core;
-
 use rand::prelude::*;
 use rs_promethee_core::generalized_criterion::GeneralizedCriterion;
 use rs_promethee_core::*;
