@@ -3,13 +3,18 @@ use rs_promethee_core::generalized_criterion::GeneralizedCriterion;
 use rs_promethee_core::*;
 
 fn random_promethee_problem(n: usize, q: usize, max_val: f64) -> PrometheeProblem {
-    let mut eval_matrix: Vec<Vec<f64>> = vec![vec![0.0; n]; q];
-    let mut generalized_criteria = Vec::<GeneralizedCriterion>::new();
-    for k in 0..q {
-        for i in 0..n {
-            eval_matrix[k][i] = max_val * random::<f64>();
+    let mut evaluations = vec![0.0; q];
+    let mut alternatives = Vec::<Alternative>::with_capacity(n);
+    for i in 0..n {
+        for k in 0..q {
+            evaluations[k] = max_val * random::<f64>();
         }
+        alternatives.push(Alternative::new(format!("a_{}", i), evaluations.clone()));
+    }
+    let alt_table = AlternativeTable::new(alternatives);
 
+    let mut generalized_criteria = Vec::<GeneralizedCriterion>::new();
+    for _ in 0..q {
         generalized_criteria.push(GeneralizedCriterion::VShape {
             p: random::<f64>() * max_val * 0.1,
         })
@@ -17,7 +22,7 @@ fn random_promethee_problem(n: usize, q: usize, max_val: f64) -> PrometheeProble
     let mut weights = vec![0f64; q];
     thread_rng().fill(&mut weights[..]);
 
-    PrometheeProblem::new(eval_matrix, generalized_criteria, weights)
+    PrometheeProblem::new(alt_table, generalized_criteria, weights)
 }
 
 fn main() {

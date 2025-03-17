@@ -1,5 +1,5 @@
 pub mod generalized_criterion;
-use calamine::{open_workbook, DataType, HeaderRow, RangeDeserializerBuilder, Reader, Xlsx};
+use calamine::{open_workbook, DataType, HeaderRow, Reader, Xlsx};
 use itertools::Itertools;
 use std::{collections::VecDeque, error::Error};
 
@@ -63,12 +63,111 @@ impl Promethee2Result {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Alternative {
+    name: String,
+    performances: Vec<f64>,
+}
+
+impl Alternative {
+    pub fn new(name: String, performances: Vec<f64>) -> Self {
+        Self { name, performances }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn perfs(&self) -> &[f64] {
+        &self.performances
+    }
+
+    pub fn perf(&self, k: usize) -> Option<&f64> {
+        self.performances.get(k)
+    }
+
+    pub fn change_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    pub fn change_perf(&mut self, k: usize, val: f64) {
+        self.performances[k] = val;
+    }
+}
+
+#[derive(Debug)]
+pub struct AlternativeTable {
+    alternatives: Vec<Alternative>,
+}
+
+impl AlternativeTable {
+    pub fn new(alternatives: Vec<Alternative>) -> Self {
+        if alternatives.is_empty() {
+            panic!("Empty table of alternatives");
+        }
+        if alternatives
+            .iter()
+            .any(|alt| alt.perfs().len() != alternatives[0].perfs().len())
+        {
+            panic!("Inconsistent number of evaluations for alternatives");
+        }
+        Self { alternatives }
+    }
+
+    pub fn alternative(&self, i: usize) -> Option<&Alternative> {
+        self.alternatives.get(i)
+    }
+
+    pub fn alternatives(&self) -> &[Alternative] {
+        &self.alternatives
+    }
+
+    pub fn criterion(&self, k: usize) -> Option<Vec<f64>> {
+        if k < self.alternatives[0].perfs().len() {
+            Some(
+                self.alternatives
+                    .iter()
+                    .map(|alt| alt.perf(k).copied().unwrap())
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn performance(&self, i: usize, k: usize) -> Option<&f64> {
+        self.alternatives.get(i)?.perf(k)
+    }
+
+    pub fn set_performance(&mut self, i: usize, k: usize, val: f64) {
+        if let Some(alt) = self.alternatives.get_mut(i) {
+            alt.change_perf(k, val);
+        }
+    }
+
+    pub fn shift_performance(&mut self, i: usize, k: usize, shift: f64) {
+        if let Some(alt) = self.alternatives.get_mut(i) {
+            let new_val = alt.perf(k).unwrap() + shift;
+            alt.change_perf(k, new_val);
+        }
+    }
+
+    pub fn n(&self) -> usize {
+        self.alternatives.len()
+    }
+
+    pub fn q(&self) -> usize {
+        self.alternatives[0].perfs().len()
+    }
+}
+
 #[derive(Debug)]
 pub struct PrometheeProblem {
     n: usize,
     q: usize,
     /// Matrix of criteria evaluations of size (q, n)
-    evaluation_matrix: Vec<Vec<f64>>,
+    alt_table: AlternativeTable,
+    /// For each criterion, the Option may contain the indices of the alternatives sorted in ascending order of evaluations
     argsorted_eval_matrix: Vec<Option<Vec<usize>>>,
     generalized_criteria: Vec<GeneralizedCriterion>,
     weights: Vec<f64>,
@@ -76,7 +175,7 @@ pub struct PrometheeProblem {
 
 impl PrometheeProblem {
     pub fn new(
-        evaluation_matrix: Vec<Vec<f64>>,
+        alt_table: AlternativeTable,
         generalized_criteria: Vec<GeneralizedCriterion>,
         mut weights: Vec<f64>,
     ) -> Self {
@@ -84,11 +183,8 @@ impl PrometheeProblem {
         let tot_w: f64 = weights.iter().sum();
         weights = weights.into_iter().map(|w| w / tot_w).collect();
 
-        let q = evaluation_matrix.len();
-        let n = evaluation_matrix
-            .first()
-            .expect("Evaluation matrix has no elements!")
-            .len();
+        let n = alt_table.n();
+        let q = alt_table.q();
 
         // Verify validity of inputs
         if generalized_criteria.len() != q {
@@ -113,9 +209,10 @@ impl PrometheeProblem {
             .map(|(k, criterion)| match criterion {
                 GeneralizedCriterion::Linear { q: _, p: _ }
                 | GeneralizedCriterion::VShape { p: _ } => {
-                    let fks = &evaluation_matrix[k];
+                    let fks =
+                        |alt: usize| -> f64 { alt_table.performance(alt, k).unwrap().to_owned() };
                     let mut argsorted_fks: Vec<usize> = (0..n).collect();
-                    argsorted_fks.sort_unstable_by(|&i, &j| fks[i].partial_cmp(&fks[j]).unwrap());
+                    argsorted_fks.sort_unstable_by(|&i, &j| fks(i).partial_cmp(&fks(j)).unwrap());
                     Some(argsorted_fks)
                 }
                 GeneralizedCriterion::Usual => None,
@@ -126,7 +223,7 @@ impl PrometheeProblem {
         Self {
             n,
             q,
-            evaluation_matrix,
+            alt_table,
             generalized_criteria,
             weights: weights.to_vec(),
             argsorted_eval_matrix,
@@ -136,8 +233,7 @@ impl PrometheeProblem {
     pub fn from_excel(file_path: &str) -> Result<PrometheeProblem, Box<dyn Error>> {
         let mut workbook: Xlsx<_> = open_workbook(file_path)?;
 
-        let mut matrix: Vec<Vec<f64>> = Vec::new();
-        let mut alt_names = Vec::<String>::new();
+        let mut alternatives: Vec<Alternative> = Vec::new();
 
         let range = workbook
             .with_header_row(HeaderRow::FirstNonEmptyRow)
@@ -193,11 +289,14 @@ impl PrometheeProblem {
                     .map(|data| data.get_float().expect("to be f64"))
                     .collect();
                 println!("{:?}", performances);
-                alt_names.push(name.to_string());
-                matrix.push(performances);
+                alternatives.push(Alternative {
+                    name: name.to_string(),
+                    performances,
+                });
             }
         }
-        todo!("transpose matrix");
+
+        let alt_table = AlternativeTable::new(alternatives);
 
         for k in 0..ncrits {
             pref_funs.push(generalized_criterion::from_params(
@@ -207,14 +306,16 @@ impl PrometheeProblem {
             ))
         }
 
-        Ok(PrometheeProblem::new(matrix, pref_funs, weights))
+        Ok(PrometheeProblem::new(alt_table, pref_funs, weights))
     }
 
     fn argsort_evals(&mut self, k: usize) {
         self.argsorted_eval_matrix[k] = {
-            let fks = &self.evaluation_matrix[k];
+            let fks =
+                |alt: usize| -> f64 { self.alt_table.performance(alt, k).unwrap().to_owned() };
+
             let mut argsorted_fks: Vec<usize> = (0..self.n()).collect();
-            argsorted_fks.sort_unstable_by(|&i, &j| fks[i].partial_cmp(&fks[j]).unwrap());
+            argsorted_fks.sort_unstable_by(|&i, &j| fks(i).partial_cmp(&fks(j)).unwrap());
             Some(argsorted_fks)
         };
     }
@@ -245,7 +346,7 @@ impl PrometheeProblem {
                         .as_ref()
                         .expect("to be computed at init")
                         .windows(2)
-                        .map(|w| self.evaluation_matrix[k][w[1]] - self.evaluation_matrix[k][w[0]])
+                        .map(|w| self.perf(k, w[1]).unwrap() - self.perf(k, w[0]).unwrap())
                         .fold(
                             f64::INFINITY,
                             |acc, b| {
@@ -264,11 +365,12 @@ impl PrometheeProblem {
 
     pub fn fast_pos_unicriterion_flow(
         &self,
+        k: usize,
         q: f64,
         p: f64,
-        fks: &[f64],
         argsorted_fks: &[usize],
     ) -> Vec<f64> {
+        let fks = |alt: usize| -> f64 { self.alt_table.performance(alt, k).unwrap().to_owned() };
         let mut positive_flow = vec![0.0; self.n];
         let (mut w, mut r) = (
             VecDeque::<usize>::new(),
@@ -280,28 +382,28 @@ impl PrometheeProblem {
         let (mut const_fact, mut last_term): (f64, f64);
 
         for &idx in argsorted_fks {
-            low = fks[idx] - p;
-            up = fks[idx] - q;
+            low = fks(idx) - p;
+            up = fks(idx) - q;
 
             // Remove elements leaving window
-            while !w.is_empty() && fks[*w.front().unwrap()] <= low {
-                sum -= fks[w.pop_front().unwrap()];
+            while !w.is_empty() && fks(*w.front().unwrap()) <= low {
+                sum -= fks(w.pop_front().unwrap());
                 card_l += 1;
             }
 
             // Remove elements leaving the right part
-            while !r.is_empty() && fks[*r.front().unwrap()] <= up {
+            while !r.is_empty() && fks(*r.front().unwrap()) <= up {
                 let x = r.pop_front().unwrap();
-                if fks[x] >= low {
+                if fks(x) >= low {
                     w.push_back(x);
-                    sum += fks[x];
+                    sum += fks(x);
                 } else {
                     card_l += 1;
                 }
             }
 
             (const_fact, last_term) = match p != q {
-                true => ((fks[idx] - q) / (p - q), -sum / (p - q)),
+                true => ((fks(idx) - q) / (p - q), -sum / (p - q)),
                 false => (0.0, 0.0),
             };
             positive_flow[idx] = 1.0 / (self.n as f64 - 1.0)
@@ -310,17 +412,18 @@ impl PrometheeProblem {
         positive_flow
     }
 
-    pub fn get_eval(&self, k: usize, i: usize) -> Option<&f64> {
-        self.evaluation_matrix.get(k)?.get(i)
+    pub fn perf(&self, k: usize, i: usize) -> Option<&f64> {
+        self.alt_table.performance(i, k)
     }
 
     pub fn fast_neg_unicriterion_flow(
         &self,
+        k: usize,
         q: f64,
         p: f64,
-        fks: &[f64],
         argsorted_fks: &[usize],
     ) -> Vec<f64> {
+        let fks = |alt: usize| -> f64 { self.alt_table.performance(alt, k).unwrap().to_owned() };
         let mut negative_flows = vec![0.0; self.n];
         let (mut l, mut w) = (
             VecDeque::from(argsorted_fks.to_owned()),
@@ -332,28 +435,28 @@ impl PrometheeProblem {
         let (mut const_fact, mut last_term): (f64, f64);
 
         for &idx in argsorted_fks.iter().rev() {
-            low = fks[idx] + q;
-            up = fks[idx] + p;
+            low = fks(idx) + q;
+            up = fks(idx) + p;
 
             // Remove elements leaving window
-            while !w.is_empty() && fks[*w.back().expect("not empty")] >= up {
-                sum -= fks[w.pop_back().expect("not empty")];
+            while !w.is_empty() && fks(*w.back().expect("not empty")) >= up {
+                sum -= fks(w.pop_back().expect("not empty"));
                 card_r += 1;
             }
 
             // Remove elements leaving the left part
-            while !l.is_empty() && fks[*l.back().expect("not empty")] >= low {
+            while !l.is_empty() && fks(*l.back().expect("not empty")) >= low {
                 let x = l.pop_back().expect("not empty");
-                if fks[x] <= up {
+                if fks(x) <= up {
                     w.push_front(x);
-                    sum += fks[x];
+                    sum += fks(x);
                 } else {
                     card_r += 1;
                 }
             }
 
             if p != q {
-                const_fact = (fks[idx] + q) / (p - q);
+                const_fact = (fks(idx) + q) / (p - q);
                 last_term = sum / (p - q);
             } else {
                 (const_fact, last_term) = (0.0, 0.0);
@@ -377,13 +480,12 @@ impl PrometheeProblem {
         };
         //
         // We work with argsort instead of sort to work with usize instead of ints
-        let fks = &self.evaluation_matrix[k];
         let argsorted_fks = self.argsorted_eval_matrix[k]
             .as_ref()
             .expect("to be computed at construction");
 
-        let positive_flow = self.fast_pos_unicriterion_flow(q, p, fks, argsorted_fks);
-        let negative_flows = self.fast_neg_unicriterion_flow(q, p, fks, argsorted_fks);
+        let positive_flow = self.fast_pos_unicriterion_flow(k, q, p, argsorted_fks);
+        let negative_flows = self.fast_neg_unicriterion_flow(k, q, p, argsorted_fks);
         Some((positive_flow, negative_flows))
     }
 
@@ -423,10 +525,15 @@ impl PrometheeProblem {
                 self.fast_unicriterion_flows(k)
             }
             _ => {
-                let dist_mat: Vec<Vec<f64>> = self.evaluation_matrix[k]
+                let dist_mat: Vec<Vec<f64>> = self
+                    .alt_table
+                    .criterion(k)
+                    .unwrap()
                     .iter()
                     .map(|&a_i| {
-                        self.evaluation_matrix[k]
+                        self.alt_table
+                            .criterion(k)
+                            .unwrap()
                             .iter()
                             .map(move |&a_j| a_i - a_j.to_owned())
                             .collect()
@@ -481,18 +588,20 @@ impl PrometheeProblem {
         match self.argsorted_eval_matrix[k].as_ref() {
             Some(sorted_indices) => sorted_indices
                 .iter()
-                .map(|&i| self.evaluation_matrix[k][i])
+                .map(|&i| self.perf(k, i).unwrap().to_owned())
                 .collect(),
             None => {
-                let mut sorted_fks = self.evaluation_matrix[k].clone();
+                let mut sorted_fks = self.alt_table.criterion(k).unwrap();
                 sorted_fks.sort_unstable_by(|&i, &j| i.partial_cmp(&j).unwrap());
                 sorted_fks
             }
         }
     }
 
-    pub fn shift_eval(&mut self, k: usize, a: usize, shift: f64) {
-        self.evaluation_matrix[k][a] += shift;
+    /// Shift the evaluation of alternative a for criterion k by shift
+    /// This sorts the evaluation matrix for criterion k afterwards (naively)
+    pub fn shift_eval(&mut self, k: usize, i: usize, shift: f64) {
+        self.alt_table.shift_performance(i, k, shift);
         self.argsort_evals(k);
     }
 }
@@ -502,14 +611,19 @@ mod tests {
     use super::*;
 
     fn init_simple_problem() -> PrometheeProblem {
-        let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 2.0], vec![1.0, 4.0, 3.0]];
+        let alt_table = AlternativeTable::new(vec![
+            Alternative::new("A".to_string(), vec![3.0, 1.0]),
+            Alternative::new("B".to_string(), vec![2.0, 4.0]),
+            Alternative::new("C".to_string(), vec![2.0, 3.0]),
+        ]);
+        // let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 2.0], vec![1.0, 4.0, 3.0]];
         let weights: Vec<f64> = vec![3.0, 7.0];
         let criteria: Vec<GeneralizedCriterion> = vec![
             GeneralizedCriterion::VShape { p: 3.0 },
             GeneralizedCriterion::Linear { q: 1.0, p: 3.0 },
         ];
 
-        PrometheeProblem::new(prob_matrix, criteria, weights)
+        PrometheeProblem::new(alt_table, criteria, weights)
     }
 
     fn round_vec(v: &mut Vec<f64>) -> Vec<f64> {
@@ -537,14 +651,19 @@ mod tests {
 
     #[test]
     fn test_solve_2() {
-        let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 0.0], vec![1.0, 4.0, 5.0]];
+        let alt_table = AlternativeTable::new(vec![
+            Alternative::new("A".to_string(), vec![3.0, 1.0]),
+            Alternative::new("B".to_string(), vec![2.0, 4.0]),
+            Alternative::new("C".to_string(), vec![0.0, 5.0]),
+        ]);
+        // let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 0.0], vec![1.0, 4.0, 5.0]];
         let weights: Vec<f64> = vec![1.0, 1.0];
         let criteria: Vec<GeneralizedCriterion> = vec![
             GeneralizedCriterion::VShape { p: 2.0 },
             GeneralizedCriterion::VShape { p: 3.0 },
         ];
 
-        let problem = PrometheeProblem::new(prob_matrix, criteria, weights);
+        let problem = PrometheeProblem::new(alt_table, criteria, weights);
 
         let solution = problem.solve();
         let final_net_flow: Vec<f64> = solution
@@ -568,10 +687,16 @@ mod tests {
 
         for k in 0..problem.q {
             let generalized_criterion = &problem.generalized_criteria[k];
-            let dist_mat: Vec<Vec<f64>> = problem.evaluation_matrix[k]
+            let dist_mat: Vec<Vec<f64>> = problem
+                .alt_table
+                .criterion(k)
+                .unwrap()
                 .iter()
                 .map(|&a_i| {
-                    problem.evaluation_matrix[k]
+                    problem
+                        .alt_table
+                        .criterion(k)
+                        .unwrap()
                         .iter()
                         .map(move |&a_j| a_i - a_j.to_owned())
                         .collect()

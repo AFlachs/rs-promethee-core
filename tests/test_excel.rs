@@ -9,17 +9,17 @@ fn read_correct_excel() {
     match res {
         Ok(problem) => {
             println!("{:?}", problem);
-            assert_eq!(*problem.get_eval(0, 0).unwrap(), 12000.0);
-            assert_eq!(*problem.get_eval(0, 1).unwrap(), 80000.0);
-            assert_eq!(*problem.get_eval(0, 2).unwrap(), 35000.0);
+            assert_eq!(*problem.perf(0, 0).unwrap(), 12000.0);
+            assert_eq!(*problem.perf(0, 1).unwrap(), 80000.0);
+            assert_eq!(*problem.perf(0, 2).unwrap(), 35000.0);
 
-            assert_eq!(*problem.get_eval(1, 0).unwrap(), 110.0);
-            assert_eq!(*problem.get_eval(1, 1).unwrap(), 290.0);
-            assert_eq!(*problem.get_eval(1, 2).unwrap(), 190.0);
+            assert_eq!(*problem.perf(1, 0).unwrap(), 110.0);
+            assert_eq!(*problem.perf(1, 1).unwrap(), 290.0);
+            assert_eq!(*problem.perf(1, 2).unwrap(), 190.0);
 
-            assert_eq!(*problem.get_eval(2, 0).unwrap(), 0.4);
-            assert_eq!(*problem.get_eval(2, 1).unwrap(), 0.4);
-            assert_eq!(*problem.get_eval(2, 2).unwrap(), 0.8);
+            assert_eq!(*problem.perf(2, 0).unwrap(), 0.4);
+            assert_eq!(*problem.perf(2, 1).unwrap(), 0.4);
+            assert_eq!(*problem.perf(2, 2).unwrap(), 0.8);
 
             todo!("Verifier les fonctions de preference");
         }

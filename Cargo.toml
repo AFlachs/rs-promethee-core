@@ -8,9 +8,9 @@ edition = "2021"
 name = "rs_promethee_core"
 path = "src/lib.rs"
 
-[[bin]]
-name = "benchmark"
-path = "src/bench.rs"
+# [[bin]]
+# name = "benchmark"
+# path = "benches/bench.rs"
 
 [dependencies]
 calamine = "0.26.1"
