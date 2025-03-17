@@ -1,6 +1,7 @@
 pub mod generalized_criterion;
+use calamine::{open_workbook, DataType, HeaderRow, RangeDeserializerBuilder, Reader, Xlsx};
 use itertools::Itertools;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, error::Error};
 
 use generalized_criterion::GeneralizedCriterion;
 
@@ -130,6 +131,83 @@ impl PrometheeProblem {
             weights: weights.to_vec(),
             argsorted_eval_matrix,
         }
+    }
+
+    pub fn from_excel(file_path: &str) -> Result<PrometheeProblem, Box<dyn Error>> {
+        let mut workbook: Xlsx<_> = open_workbook(file_path)?;
+
+        let mut matrix: Vec<Vec<f64>> = Vec::new();
+        let mut alt_names = Vec::<String>::new();
+
+        let range = workbook
+            .with_header_row(HeaderRow::FirstNonEmptyRow)
+            .worksheet_range("Promethee")?;
+
+        let ncrits = range.width() - 1;
+        let mut weights: Vec<f64> = Vec::with_capacity(ncrits);
+        let mut pref_funs = Vec::with_capacity(ncrits);
+        let mut fun_types: Vec<&str> = Vec::with_capacity(ncrits);
+        let mut qs = Vec::with_capacity(ncrits);
+        let mut ps = Vec::with_capacity(ncrits);
+
+        let _criteria_names: Vec<String> = range
+            .headers()
+            .map(|headers| headers.into_iter().skip(1).collect())
+            .expect("To have headers");
+
+        for (i, row) in range.rows().enumerate() {
+            if i == 0 {
+                continue;
+            } else if i == 1 {
+                let (_, ws) = row.split_at(1);
+                weights = ws
+                    .into_iter()
+                    .map(|data_w| data_w.get_float().expect("to be f64"))
+                    .collect();
+            } else if i == 2 {
+                let (_, ftypes) = row.split_at(1);
+                fun_types = ftypes
+                    .into_iter()
+                    .map(|data_ft| data_ft.get_string().expect("to be string"))
+                    .collect();
+            } else if i == 3 {
+                let (_, q_data) = row.split_at(1);
+                qs = q_data
+                    .into_iter()
+                    .map(|q| q.get_float().expect("to be f64"))
+                    .collect();
+            } else if i == 4 {
+                let (_, p_data) = row.split_at(1);
+                ps = p_data
+                    .into_iter()
+                    .map(|p| p.get_float().expect("to be f64"))
+                    .collect();
+            } else {
+                if row.len() != ncrits + 1 {
+                    return Err("Invalid number of columns".into());
+                }
+                let name = row[0].get_string().expect("To be string");
+                let performances = row
+                    .into_iter()
+                    .skip(1)
+                    .map(|data| data.get_float().expect("to be f64"))
+                    .collect();
+                println!("{:?}", performances);
+                alt_names.push(name.to_string());
+                matrix.push(performances);
+            }
+        }
+        todo!("transpose matrix");
+
+        for k in 0..ncrits {
+            pref_funs.push(generalized_criterion::from_params(
+                fun_types[k],
+                qs[k],
+                ps[k],
+            ))
+        }
+
+        Ok(PrometheeProblem::new(matrix, pref_funs, weights))
     }
 
     fn argsort_evals(&mut self, k: usize) {

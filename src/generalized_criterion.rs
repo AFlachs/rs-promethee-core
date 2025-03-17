@@ -71,6 +71,18 @@ fn normalize_v_shape(p: f64, d_ij: f64) -> f64 {
     }
 }
 
+pub fn from_params(ftype: &str, q: f64, p: f64) -> GeneralizedCriterion {
+    println!("{}", ftype);
+    match ftype {
+        "Usual" => GeneralizedCriterion::Usual,
+        "U-Shape" => GeneralizedCriterion::UShape { p },
+        "V-Shape" => GeneralizedCriterion::VShape { p },
+        "Linear" => GeneralizedCriterion::Linear { q, p },
+        "Level" | "Gaussian" => unimplemented!(),
+        _ => panic!("Wrong type"),
+    }
+}
+
 #[cfg(test)]
 mod test_generalized_normalisation {
     use super::normalize_linear;
