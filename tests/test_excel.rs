@@ -1,4 +1,4 @@
-use rs_promethee_core::PrometheeProblem;
+use rs_promethee_core::{generalized_criterion::GeneralizedCriterion, PrometheeProblem};
 
 #[test]
 fn read_correct_excel() {
@@ -21,7 +21,24 @@ fn read_correct_excel() {
             assert_eq!(*problem.perf(2, 1).unwrap(), 0.4);
             assert_eq!(*problem.perf(2, 2).unwrap(), 0.8);
 
-            todo!("Verifier les fonctions de preference");
+            assert_eq!(problem.n(), 3);
+            assert_eq!(problem.q(), 3);
+
+            let real_names = ["Prix", "Vitesse", "Robustesse"];
+
+            problem
+                .criteria_names()
+                .iter()
+                .enumerate()
+                .for_each(|(k, name)| assert_eq!(name.as_ref(), real_names[k]));
+
+            let pref_funs = [
+                GeneralizedCriterion::VShape { p: 1000.0 },
+                GeneralizedCriterion::Linear { q: 10.0, p: 30.0 },
+                GeneralizedCriterion::Linear { q: 0.1, p: 0.3 },
+            ];
+
+            (0..problem.q()).for_each(|k| assert_eq!(*problem.pref_fun(k).unwrap(), pref_funs[k]));
         }
         Err(e) => assert!(false, "Should read excel file, error: {:?}", e),
     }

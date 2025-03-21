@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum GeneralizedCriterion {
     UShape { p: f64 },
     VShape { p: f64 },
