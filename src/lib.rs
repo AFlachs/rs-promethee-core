@@ -2,9 +2,9 @@ pub mod alternatives;
 pub mod generalized_criterion;
 use calamine::{open_workbook, DataType, HeaderRow, Reader, Xlsx};
 use itertools::Itertools;
-use std::{collections::VecDeque, error::Error};
+use std::{collections::VecDeque, error::Error, str::FromStr};
 
-use alternatives::{Alternative, AlternativeTable};
+use alternatives::{Alternative, AlternativeTable, OptimizationDirection};
 use generalized_criterion::GeneralizedCriterion;
 
 #[derive(Debug)]
@@ -87,6 +87,8 @@ impl PrometheeProblem {
         let tot_w: f64 = weights.iter().sum();
         weights = weights.into_iter().map(|w| w / tot_w).collect();
 
+        // TODO todo!("Use optimization direction somehow");
+
         let n = alt_table.n();
         let q = alt_table.q();
 
@@ -137,8 +139,6 @@ impl PrometheeProblem {
     pub fn from_excel(file_path: &str) -> Result<PrometheeProblem, Box<dyn Error>> {
         let mut workbook: Xlsx<_> = open_workbook(file_path)?;
 
-        let mut alternatives: Vec<Alternative> = Vec::new();
-
         let range = workbook
             .with_header_row(HeaderRow::FirstNonEmptyRow)
             .worksheet_range("Promethee")?;
@@ -155,28 +155,42 @@ impl PrometheeProblem {
             .map(|headers| headers.into_iter().skip(1).collect())
             .expect("To have headers");
 
+        let mut alternatives: Vec<Alternative> = Vec::new();
+        let mut criteria_directions: Vec<OptimizationDirection> = Vec::new();
+
         for (i, row) in range.rows().enumerate() {
             if i == 0 {
                 continue;
             } else if i == 1 {
+                let (_, directions) = row.split_at(1);
+                criteria_directions = directions
+                    .into_iter()
+                    .map(|data_dir| {
+                        OptimizationDirection::from_str(
+                            data_dir.get_string().expect("to be string"),
+                        )
+                        .expect("to be valid direction")
+                    })
+                    .collect();
+            } else if i == 2 {
                 let (_, ws) = row.split_at(1);
                 weights = ws
                     .into_iter()
                     .map(|data_w| data_w.get_float().expect("to be f64"))
                     .collect();
-            } else if i == 2 {
+            } else if i == 3 {
                 let (_, ftypes) = row.split_at(1);
                 fun_types = ftypes
                     .into_iter()
                     .map(|data_ft| data_ft.get_string().expect("to be string"))
                     .collect();
-            } else if i == 3 {
+            } else if i == 4 {
                 let (_, q_data) = row.split_at(1);
                 qs = q_data
                     .into_iter()
                     .map(|q| q.get_float().expect("to be f64"))
                     .collect();
-            } else if i == 4 {
+            } else if i == 5 {
                 let (_, p_data) = row.split_at(1);
                 ps = p_data
                     .into_iter()
@@ -197,7 +211,9 @@ impl PrometheeProblem {
             }
         }
 
-        let alt_table = AlternativeTable::new(&alternatives).with_criteria_names(criteria_names);
+        let alt_table = AlternativeTable::new(alternatives.into_boxed_slice())
+            .with_criteria_names(criteria_names)
+            .with_criteria_directions(criteria_directions);
 
         for k in 0..ncrits {
             pref_funs.push(generalized_criterion::from_params(
@@ -520,11 +536,14 @@ mod tests {
     use super::*;
 
     fn init_simple_problem() -> PrometheeProblem {
-        let alt_table = AlternativeTable::new(&vec![
-            Alternative::new("A".to_string(), vec![3.0, 1.0]),
-            Alternative::new("B".to_string(), vec![2.0, 4.0]),
-            Alternative::new("C".to_string(), vec![2.0, 3.0]),
-        ]);
+        let alt_table = AlternativeTable::new(
+            vec![
+                Alternative::new("A".to_string(), vec![3.0, 1.0]),
+                Alternative::new("B".to_string(), vec![2.0, 4.0]),
+                Alternative::new("C".to_string(), vec![2.0, 3.0]),
+            ]
+            .into(),
+        );
         // let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 2.0], vec![1.0, 4.0, 3.0]];
         let weights: Vec<f64> = vec![3.0, 7.0];
         let criteria: Vec<GeneralizedCriterion> = vec![
@@ -560,11 +579,14 @@ mod tests {
 
     #[test]
     fn test_solve_2() {
-        let alt_table = AlternativeTable::new(&vec![
-            Alternative::new("A".to_string(), vec![3.0, 1.0]),
-            Alternative::new("B".to_string(), vec![2.0, 4.0]),
-            Alternative::new("C".to_string(), vec![0.0, 5.0]),
-        ]);
+        let alt_table = AlternativeTable::new(
+            vec![
+                Alternative::new("A".to_string(), vec![3.0, 1.0]),
+                Alternative::new("B".to_string(), vec![2.0, 4.0]),
+                Alternative::new("C".to_string(), vec![0.0, 5.0]),
+            ]
+            .into(),
+        );
         // let prob_matrix: Vec<Vec<f64>> = vec![vec![3.0, 2.0, 0.0], vec![1.0, 4.0, 5.0]];
         let weights: Vec<f64> = vec![1.0, 1.0];
         let criteria: Vec<GeneralizedCriterion> = vec![

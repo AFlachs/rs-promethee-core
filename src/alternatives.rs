@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 #[derive(Debug, Clone)]
 pub struct Alternative {
     name: String,
@@ -30,14 +32,33 @@ impl Alternative {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum OptimizationDirection {
+    Min,
+    Max,
+}
+
+impl FromStr for OptimizationDirection {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "min" | "Min" | "MIN" => Ok(Self::Min),
+            "max" | "Max" | "MAX" => Ok(Self::Max),
+            _ => Err(format!("Invalid optimization direction: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AlternativeTable {
     alternatives: Box<[Alternative]>,
     criteria_names: Box<[Box<str>]>,
+    criteria_direction: Box<[OptimizationDirection]>,
 }
 
 impl AlternativeTable {
-    pub fn new(alternatives: &[Alternative]) -> Self {
+    pub fn new(alternatives: Box<[Alternative]>) -> Self {
         if alternatives.is_empty() {
             panic!("Empty table of alternatives");
         }
@@ -47,10 +68,29 @@ impl AlternativeTable {
         {
             panic!("Inconsistent number of evaluations for alternatives");
         }
+
+        let q = alternatives[0].perfs().len();
+        let criteria_names = (0..q)
+            .map(|k| format!("Criterion {}", k + 1).into())
+            .collect();
+
         Self {
-            alternatives: alternatives.into(),
-            criteria_names: Box::new([]),
+            alternatives,
+            criteria_names,
+            criteria_direction: vec![OptimizationDirection::Max; q].into(),
         }
+    }
+
+    pub fn with_criteria_directions(
+        mut self,
+        criteria_direction: Vec<OptimizationDirection>,
+    ) -> Self {
+        self.criteria_direction = criteria_direction.into();
+        self
+    }
+
+    pub fn set_criterion_direction(&mut self, k: usize, direction: OptimizationDirection) {
+        self.criteria_direction[k] = direction;
     }
 
     pub fn with_criteria_names(mut self, criteria_names: Vec<String>) -> Self {
