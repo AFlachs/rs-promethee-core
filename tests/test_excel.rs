@@ -1,11 +1,11 @@
-use rs_promethee_core::{generalized_criterion::GeneralizedCriterion, PrometheeProblem};
+use rs_promethee_core::{parse, generalized_criterion::GeneralizedCriterion, PrometheeProblem};
 
 #[test]
-fn read_correct_excel() {
+pub fn read_correct_excel() {
     let project_path = env!("CARGO_MANIFEST_DIR");
     let file_path = format!("{}/tests/files/test_correct.xlsx", project_path);
 
-    let res = PrometheeProblem::from_excel(&file_path);
+    let res = parse::from_excel(&file_path);
     match res {
         Ok(problem) => {
             println!("{:?}", problem);

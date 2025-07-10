@@ -1,6 +1,7 @@
 use rand::prelude::*;
 use rs_promethee_core::generalized_criterion::GeneralizedCriterion;
 use rs_promethee_core::*;
+use rs_promethee_core::alternatives::{Alternative, AlternativeTable};
 
 fn random_promethee_problem(n: usize, q: usize, max_val: f64) -> PrometheeProblem {
     let mut evaluations = vec![0.0; q];
@@ -11,7 +12,7 @@ fn random_promethee_problem(n: usize, q: usize, max_val: f64) -> PrometheeProble
         }
         alternatives.push(Alternative::new(format!("a_{}", i), evaluations.clone()));
     }
-    let alt_table = AlternativeTable::new(alternatives);
+    let alt_table = AlternativeTable::new(alternatives.into());
 
     let mut generalized_criteria = Vec::<GeneralizedCriterion>::new();
     for _ in 0..q {
