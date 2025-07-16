@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Alternative {
     name: String,
     performances: Vec<f64>,
@@ -32,7 +34,7 @@ impl Alternative {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OptimizationDirection {
     Min,
     Max,
@@ -50,7 +52,7 @@ impl FromStr for OptimizationDirection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AlternativeTable {
     alternatives: Box<[Alternative]>,
     criteria_names: Box<[Box<str>]>,

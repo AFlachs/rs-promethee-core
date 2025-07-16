@@ -5,12 +5,13 @@ pub mod generalized_criterion;
 pub mod parse;
 
 use itertools::Itertools;
-use std::{collections::VecDeque};
+use std::collections::VecDeque;
 
 use alternatives::AlternativeTable;
 use generalized_criterion::GeneralizedCriterion;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Promethee2Result {
     pub positive_flows: Vec<f64>,
     pub unicrit_positive_flows: Vec<Vec<f64>>,
@@ -68,7 +69,7 @@ impl Promethee2Result {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PrometheeProblem {
     n: usize,
     q: usize,
@@ -448,7 +449,6 @@ impl PrometheeProblem {
 mod tests {
     use super::*;
     use alternatives::{Alternative, AlternativeTable};
-
 
     fn init_simple_problem() -> PrometheeProblem {
         let alt_table = AlternativeTable::new(
