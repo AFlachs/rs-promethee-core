@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum GeneralizedCriterion {
     UShape { p: f64 },
     VShape { p: f64 },
@@ -72,7 +74,6 @@ fn normalize_v_shape(p: f64, d_ij: f64) -> f64 {
 }
 
 pub fn from_params(ftype: &str, q: f64, p: f64) -> GeneralizedCriterion {
-    println!("{}", ftype);
     match ftype {
         "Usual" => GeneralizedCriterion::Usual,
         "U-Shape" => GeneralizedCriterion::UShape { p },
