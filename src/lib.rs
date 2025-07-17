@@ -5,11 +5,11 @@ pub mod generalized_criterion;
 pub mod parse;
 
 use itertools::Itertools;
-use std::{collections::VecDeque, error::Error, str::FromStr};
+use std::collections::VecDeque;
 use tabled;
 use tabled::settings::Style;
 
-use alternatives::AlternativeTable;
+use alternatives::{AlternativeTable, OptimizationDirection};
 use generalized_criterion::GeneralizedCriterion;
 use serde::{Deserialize, Serialize};
 
