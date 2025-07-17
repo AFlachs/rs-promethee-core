@@ -54,6 +54,9 @@ impl FromStr for OptimizationDirection {
 pub struct AlternativeTable {
     alternatives: Box<[Alternative]>,
     criteria_names: Box<[Box<str>]>,
+    /// Direction of optimization for each criterion, only used as an indicator for display.
+    /// If a criterion is indicated to minimize, its evaluations are multiplied by -1 at build time
+    /// so that it can be maximized.
     criteria_direction: Box<[OptimizationDirection]>,
 }
 
@@ -93,6 +96,29 @@ impl AlternativeTable {
         self.criteria_direction[k] = direction;
     }
 
+    pub fn criterion_direction(&self, k: usize) -> &OptimizationDirection {
+        &self.criteria_direction[k]
+    }
+
+    pub fn criteria_directions(&self) -> &[OptimizationDirection] {
+        &self.criteria_direction
+    }
+
+    pub fn swap_criteria_direction(&mut self, k: usize) {
+        if k >= self.criteria_direction.len() {
+            panic!("Invalid criterion index");
+        }
+        self.criteria_direction[k] = match self.criteria_direction[k] {
+            OptimizationDirection::Min => OptimizationDirection::Max,
+            OptimizationDirection::Max => OptimizationDirection::Min,
+        };
+        // Invert evaluations for this criterion
+        for alt in self.alternatives.iter_mut() {
+            let val = alt.perf(k).unwrap();
+            alt.change_perf(k, -val);
+        }
+    }
+
     pub fn with_criteria_names(mut self, criteria_names: Vec<String>) -> Self {
         self.criteria_names = criteria_names.into_iter().map(|s| s.into()).collect();
         self
@@ -104,6 +130,17 @@ impl AlternativeTable {
 
     pub fn alternatives(&self) -> &[Alternative] {
         &self.alternatives
+    }
+
+    pub fn alt_name(&self, i: usize) -> Option<&str> {
+        match self.alternatives.get(i) {
+            Some(alt) => Some(alt.name()),
+            None => None,
+        }
+    }
+
+    pub fn alt_names(&self) -> Vec<&str> {
+        self.alternatives.iter().map(|alt| alt.name()).collect()
     }
 
     pub fn criterion(&self, k: usize) -> Option<Vec<f64>> {

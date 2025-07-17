@@ -3,6 +3,8 @@ pub mod generalized_criterion;
 use calamine::{open_workbook, DataType, HeaderRow, Reader, Xlsx};
 use itertools::Itertools;
 use std::{collections::VecDeque, error::Error, str::FromStr};
+use tabled;
+use tabled::settings::Style;
 
 use alternatives::{Alternative, AlternativeTable, OptimizationDirection};
 use generalized_criterion::GeneralizedCriterion;
@@ -204,9 +206,13 @@ impl PrometheeProblem {
                 let performances = row
                     .into_iter()
                     .skip(1)
-                    .map(|data| data.get_float().expect("to be f64"))
+                    .zip(criteria_directions.iter().map(|dir| match dir {
+                        OptimizationDirection::Max => 1.0,
+                        OptimizationDirection::Min => -1.0,
+                    }))
+                    .map(|(data, d)| d * data.get_float().expect("to be f64"))
                     .collect();
-                println!("{:?}", performances);
+
                 alternatives.push(Alternative::new(name.to_string(), performances));
             }
         }
@@ -251,6 +257,14 @@ impl PrometheeProblem {
 
     pub fn pref_fun(&self, k: usize) -> Option<&GeneralizedCriterion> {
         self.generalized_criteria.get(k)
+    }
+
+    pub fn alt_name(&self, i: usize) -> Option<&str> {
+        self.alt_table.alt_name(i)
+    }
+
+    pub fn alt_names(&self) -> Vec<&str> {
+        self.alt_table.alt_names()
     }
 
     pub fn criterion_name(&self, k: usize) -> Option<&str> {
@@ -528,6 +542,67 @@ impl PrometheeProblem {
     pub fn shift_eval(&mut self, k: usize, i: usize, shift: f64) {
         self.alt_table.shift_performance(i, k, shift);
         self.argsort_evals(k);
+    }
+
+    pub fn print(&self) {
+        println!(
+            "Promethee problem with {} alternatives and {} criteria",
+            self.n, self.q
+        );
+        let mut builder = tabled::builder::Builder::default();
+        let crit_names = self.alt_table.criteria_names();
+
+        use std::iter::once;
+
+        builder.push_record(
+            once("Criteria")
+                .chain(crit_names.iter().map(|s| s.as_ref()))
+                .collect::<Vec<_>>(),
+        );
+
+        builder.push_record(
+            once("Directions")
+                .chain(
+                    self.alt_table
+                        .criteria_directions()
+                        .iter()
+                        .map(|d| match d {
+                            OptimizationDirection::Min => "Min",
+                            OptimizationDirection::Max => "Max",
+                        }),
+                )
+                .collect::<Vec<_>>(),
+        );
+
+        builder.push_record(
+            once("Weights".to_string())
+                .chain(self.weights.iter().map(|&w| w.to_string()))
+                .collect::<Vec<_>>(),
+        );
+
+        builder.push_record(
+            once("Preference functions".to_string())
+                .chain(self.generalized_criteria.iter().map(|c| match c {
+                    GeneralizedCriterion::UShape { p } => format!("UShape({})", p),
+                    GeneralizedCriterion::VShape { p } => format!("VShape({})", p),
+                    GeneralizedCriterion::Linear { q, p } => format!("Linear({}, {})", q, p),
+                    GeneralizedCriterion::Usual => "Usual".to_string(),
+                }))
+                .collect::<Vec<_>>(),
+        );
+
+        // Print alternatives
+        for alternative in self.alt_table.alternatives() {
+            builder.push_record(
+                once(alternative.name().to_string())
+                    .chain(alternative.perfs().iter().map(|&v| v.to_string()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let mut table = builder.build();
+        table.with(Style::modern());
+
+        println!("{}", table);
     }
 }
 
