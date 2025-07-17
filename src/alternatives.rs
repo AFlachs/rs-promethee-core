@@ -83,6 +83,28 @@ impl AlternativeTable {
         }
     }
 
+    pub fn from_matrix(matrix: Vec<Vec<f64>>) -> Self {
+        if matrix.is_empty() || matrix[0].is_empty() {
+            panic!("Matrix must not be empty");
+        }
+
+        let q = matrix[0].len();
+
+        // Verify that all lines have same number of rows
+        if matrix.iter().any(|row| row.len() != q) {
+            panic!("Inconsistent number of criteria across alternatives");
+        }
+
+        // Create names as a_1, a_2...
+        let alternatives: Vec<Alternative> = matrix
+            .into_iter()
+            .enumerate()
+            .map(|(i, perfs)| Alternative::new(format!("a_{}", i + 1), perfs))
+            .collect();
+
+        Self::new(alternatives.into_boxed_slice())
+    }
+
     pub fn with_criteria_directions(
         mut self,
         criteria_direction: Vec<OptimizationDirection>,
