@@ -120,7 +120,8 @@ impl PrometheeProblem {
             .enumerate()
             .map(|(k, criterion)| match criterion {
                 GeneralizedCriterion::Linear { q: _, p: _ }
-                | GeneralizedCriterion::VShape { p: _ } => {
+                | GeneralizedCriterion::VShape { p: _ }
+                | GeneralizedCriterion::UShape { p: _ } => {
                     let fks =
                         |alt: usize| -> f64 { alt_table.performance(alt, k).unwrap().to_owned() };
                     let mut argsorted_fks: Vec<usize> = (0..n).collect();
